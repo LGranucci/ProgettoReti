@@ -98,15 +98,14 @@ int main()
     ret = bind(sd, (struct sockaddr *)&my_addr, sizeof(my_addr));
     ret = listen(sd, 10);
 
-    while (1)
-    {
+    while (1){
         len = sizeof(cl_addr);
+        printf("blocking on accept\n");
         new_sd = accept(sd, (struct sockaddr *)&cl_addr, &len);
         printf("accepted connection\n");
 
         pid = fork();
-        if (pid == 0)
-        {
+        if (pid == 0){
             int selected_quiz = 0;
             int punteggio = 0;
             close(sd);
@@ -227,14 +226,14 @@ int main()
                     break;
                 }
             }
+            exit(0);    
         }
+
         else
         {
             close(new_sd);
         }
-        close(new_sd);
-        close(sd);
-        exit(0);
+       
     }
 
     return 0;
