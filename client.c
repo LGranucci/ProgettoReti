@@ -6,6 +6,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdlib.h>
+#define MAX_LENGHT_QUESTION 1024
+#define MAX_LENGHT_ANSWER 1024
 
 int main(){
 	int ret, sd;
@@ -54,14 +56,14 @@ int main(){
         fgets(buffer, 1024, stdin);
         int message_lenght = strlen(buffer) + 1;
         net_message_lenght = htonl(message_lenght);
-        send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
+        //send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
         send(sd, (void*)buffer, message_lenght, 0);
         
         memset(buffer,0,strlen(buffer));
         
         recv(sd, buffer, 3, 0);
         printf("%s buffer ricevuto\n", buffer);
-        if(strcmp(buffer, "OK") == 0){
+        if(strcmp(buffer, "OK\n") == 0){
             scelta = 1;
 
         }
@@ -97,17 +99,18 @@ int main(){
             int lunghezza;
             printf("Quiz - %s\n", categoriaScelta);
             printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-            recv(sd, &lunghezza, sizeof(lunghezza), 0);
-            lunghezza = ntohl(lunghezza);
-            printf("lunghezza 2 %d\n", lunghezza);
-            recv(sd, buffer, lunghezza, 0);
+            
+            //recv(sd, &lunghezza, sizeof(lunghezza), 0);
+            //lunghezza = ntohl(lunghezza);
+            //printf("lunghezza 2 %d\n", lunghezza);
+            recv(sd, buffer, MAX_LENGHT_QUESTION, 0);
 
             printf("%s\n", buffer);
             printf("La tua risposta:\n");
             fgets(buffer, 1024, stdin);
             int message_lenght = strlen(buffer) + 1;
             net_message_lenght = htonl(message_lenght);
-            send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
+            //send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
             send(sd, (void*)buffer, message_lenght, 0);
             memset(buffer,0,strlen(buffer));
             

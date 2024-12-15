@@ -17,10 +17,11 @@
 struct quiz
 {
     char domanda[BUF_LEN];
-
     struct quiz *next;
     char risposta[BUF_LEN];
 };
+
+
 
 struct quiz *fetch_questions(int selected_quiz)
 {
@@ -30,9 +31,7 @@ struct quiz *fetch_questions(int selected_quiz)
     struct quiz *new = NULL;
     FILE *file;
     char line[BUF_LEN];
-    char *token;
-    char *domanda;
-    char *risposta;
+    
 
     switch (selected_quiz)
     {
@@ -82,6 +81,8 @@ struct quiz *fetch_questions(int selected_quiz)
     return head;
 }
 
+char* username_array[BUF_LEN];
+
 int main()
 {
     int ret, sd, new_sd, porta;
@@ -112,8 +113,7 @@ int main()
             // ask for nickname
             // make an entry in database with nickname and current score (0)
             int found = 1;
-            while (found)
-            {
+            while (found){
                 found = 0;
                
                 int leng = 0;
@@ -127,47 +127,27 @@ int main()
                 strcpy(username, buffer);
                 printf("username: %s\n", username);
 
-                FILE *file;
-                char line[BUF_LEN];
-
-                file = fopen("data/username", "r");
-                if (file == NULL)
-                {
-                    perror("Error opening file");
-                    exit(EXIT_FAILURE);
-                }
-
-                while (fgets(line, sizeof(line), file))
-                {
-
-                    printf("username: %s\n", username);
-                    if (strcmp(line, username) == 0)
-                    {
-                        found = 1;
+                for(int i = 0; i < BUF_LEN; i++){
+                    printf("username_array[%d]: %s\n", i, username_array[i]);
+                    if(username_array[i] != NULL){
+                        if(strcmp(username_array[i], username) == 0){
+                            found = 1;
+                            break;
+                        }
+                    }
+                    else{
+                        username_array[i] = (char *)malloc(strlen(username) + 1);
+                      
+                        strcpy(username_array[i], username);
+                        printf("username_array[%d]: %s\n", i, username_array[i]);
                         break;
                     }
                 }
 
-                if (!found)
-                {
-                    FILE *file_append = fopen("data/username", "a");
-                    if (file_append == NULL)
-                    {
-                        perror("Error opening file for appending");
-                        exit(EXIT_FAILURE);
-                    }
-                    fprintf(file_append, "%s\n", username);
-                    fclose(file_append);
-                }
-
-                fclose(file);
-
-                if (found)
-                {
+                if (found){
                     strcpy(buffer, "NO");
                 }
-                else
-                {
+                else{
                     strcpy(buffer, "OK");
                 }
 
