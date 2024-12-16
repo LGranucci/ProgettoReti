@@ -10,6 +10,7 @@
 #define MAX_CLIENTS 10
 #define BUFFER_SIZE 1024
 #define PORT 4242
+#define MAX_CATEGORIA_LENGHT 50
 #define NUM_CATEGORIE 2
 #define LOGIN 1
 #define QUIZ 2
@@ -20,15 +21,17 @@
 #define END 5
 
 
-#define MAX_DOMANDE 10
-struct questions{
+#define MAX_DOMANDE 5
+struct question{
     char domanda[BUFFER_SIZE];
     char risposta[BUFFER_SIZE];
     
 };
 struct quiz{
-    int categoria;
-    struct questions domande[MAX_DOMANDE];
+    char categoria[MAX_CATEGORIA_LENGHT];
+    struct question domande[MAX_DOMANDE];
+    int isset;
+    int numDomande;
 };
 struct client{
     int socket;
@@ -43,11 +46,9 @@ struct client{
 struct client clients[MAX_CLIENTS];
 struct quiz quiz_list[NUM_CATEGORIE];
 
-
-void create_quiz_list(){
-    quiz_list[0].categoria = 1;
-    //fetch quiz from data/quiz1
-    FILE* file = fopen("data/quiz1", "r");
+void create_category_list(){
+    //fetch categorie from data/categorie
+    FILE* file = fopen("data/categorie", "r");
     if(file == NULL){
         perror("fopen");
         exit(EXIT_FAILURE);
@@ -55,17 +56,48 @@ void create_quiz_list(){
     char line[BUFFER_SIZE];
     int i = 0;
     while(fgets(line, sizeof(line), file)){
-        strcpy(quiz_list[0].domande[i].domanda, line);
-        fgets(line, sizeof(line), file);
-        strcpy(quiz_list[0].domande[i].risposta, line);
+        printf("categoria %s\n", line);
+        //allocate 
+        strcpy(quiz_list[i].categoria, line);
+        quiz_list[i].isset = 1;
         i++;
     }
-    for(int i = 0; i < MAX_DOMANDE; i++){
-        printf("domanda %s\n", quiz_list[0].domande[i].domanda);
-        printf("risposta %s\n", quiz_list[0].domande[i].risposta);
-    }
     fclose(file);
-    
+}   
+
+
+void create_quiz_list(){
+    //fetch quiz from data/quiz1
+    char buffer[] = "data/quiz";
+    for(int i = 0; i < NUM_CATEGORIE; i++){
+        //concatenate buffer with i
+        char quiz_file[BUFFER_SIZE];
+       
+        sprintf(quiz_file, "%s%d", buffer, i + 1);
+        //open file
+        printf("opening %s\n", quiz_file);
+
+         FILE* file = fopen(quiz_file, "r");
+
+        if(file == NULL){
+            perror("fopen");
+            exit(EXIT_FAILURE);
+        }
+        char line[BUFFER_SIZE];
+        int j = 0;
+        while(fgets(line, sizeof(line), file)){
+            strcpy(quiz_list[i].domande[j].domanda, line);
+            fgets(line, sizeof(line), file);
+            strcpy(quiz_list[i].domande[j].risposta, line);
+            j++;
+        }
+        quiz_list[i].numDomande = j;
+        for(int j = 0; j < MAX_DOMANDE; j++){
+            printf("domanda %s\n", quiz_list[i].domande[j].domanda);
+            printf("risposta %s\n", quiz_list[i].domande[j].risposta);
+        }
+        fclose(file);
+    }
 }
 
 
@@ -84,7 +116,6 @@ void handle_login(int client_sock, fd_set* acrive_fds){
     } else {
         buffer[bytes_read] = '\0';
         printf("Client %d sent: %s\n", client_sock, buffer);
-        // Simulazione risposta
         char response[] = "OK\n";
         for (int i = 0; i < MAX_CLIENTS; i++){
             if(strcmp(clients[i].username, buffer) == 0){
@@ -102,11 +133,15 @@ void handle_login(int client_sock, fd_set* acrive_fds){
 }
 
 void send_question(int client_sock){
-    for(int i = 0; i < MAX_DOMANDE; i++){
-        printf("domanda %s\n", quiz_list[0].domande[i].domanda);
-        printf("risposta %s\n", quiz_list[0].domande[i].risposta);
-    }
 
+    if(clients[client_sock].current_question >= quiz_list[clients[client_sock].current_quiz].numDomande){
+        printf("quiz finito\n");
+        char endQuiz[] = "END\n";
+        //send endQuiz to client
+        send(client_sock, endQuiz, strlen(endQuiz), 0);
+        clients[client_sock].current_stage = PUNTEGGIO;
+        return;
+    }
 
 
 
@@ -114,8 +149,9 @@ void send_question(int client_sock){
     char current_question[MAX_LENGHT_QUESTION];
     //send first quiz question 
     struct quiz current_quiz = quiz_list[clients[client_sock].current_quiz];
-    strcpy(current_question, quiz_list[0].domande[clients[client_sock].current_question].domanda);
-    printf("domanda %s\n", quiz_list[0].domande[clients[client_sock].current_question].domanda);
+    strcpy(current_question, current_quiz.domande[clients[client_sock].current_question].domanda);
+
+    printf("domanda %s\n", current_quiz.domande[clients[client_sock].current_question].domanda);
     //for now, I will assume a MAX lenght of answers, this may change
     send(client_sock, current_question, strlen(current_question), 0);
 }
@@ -128,8 +164,10 @@ void handle_quiz(int client_sock, fd_set* acrive_fds){
     //ricezione scelta
     recv(client_sock, &ret, sizeof(ret), 0);
     printf("scelta %d\n", ret);
-    clients[client_sock].current_quiz = ret;
+    clients[client_sock].current_quiz = ret - 1;
     clients[client_sock].current_stage = RISPOSTA;
+    clients[client_sock].current_question = 0;
+    clients[client_sock].score[ret - 1] = 0;
     //send first quiz question 
     send_question(client_sock);
 }
@@ -142,13 +180,17 @@ void handle_answers(int client_sock){
     //send first quiz question 
     char given_answer[MAX_LENGHT_ANSWER];
     struct quiz current_quiz = quiz_list[clients[client_sock].current_quiz];
-    strcpy(current_answer, current_quiz.domande[clients[client_sock].current_question].risposta);
+    strcpy(current_answer, quiz_list[clients[client_sock].current_quiz].domande[clients[client_sock].current_question].risposta);
     //recieve answer
     recv(client_sock, given_answer, MAX_LENGHT_ANSWER, 0);
+    printf("risposta data %s\n", given_answer);
+    printf("risposta corretta %s\n", current_answer);
+    printf("lunghezza risposta data %ld\n", strlen(given_answer));
+    printf("lunghezza risposta corretta %ld\n", strlen(current_answer));
     if(strcmp(current_answer, given_answer) == 0){
         char response[] = "OK\n";
         send(client_sock, response, strlen(response), 0);
-        clients[client_sock].score[current_quiz.categoria]++;
+        clients[client_sock].score[clients[client_sock].current_quiz]++;
     }
     else{
         char response[] = "NO\n";
@@ -173,6 +215,7 @@ int main() {
         perror("Socket failed");
         exit(EXIT_FAILURE);
     }
+    create_category_list();
     create_quiz_list();
     // Binding
     address.sin_family = AF_INET;

@@ -103,20 +103,26 @@ int main(){
             //recv(sd, &lunghezza, sizeof(lunghezza), 0);
             //lunghezza = ntohl(lunghezza);
             //printf("lunghezza 2 %d\n", lunghezza);
-            recv(sd, buffer, MAX_LENGHT_QUESTION, 0);
-
+            int bytes_read = recv(sd, buffer, MAX_LENGHT_QUESTION, 0);
+            buffer[bytes_read] = '\0';
             printf("%s\n", buffer);
+            if(strcmp("END\n", buffer) == 0){
+                printf("ENDQUIZZED\n");
+            }
             printf("La tua risposta:\n");
             fgets(buffer, 1024, stdin);
             int message_lenght = strlen(buffer) + 1;
             net_message_lenght = htonl(message_lenght);
             //send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
             send(sd, (void*)buffer, message_lenght, 0);
-            memset(buffer,0,strlen(buffer));
+            memset(buffer,0,MAX_LENGHT_ANSWER);
             
             recv(sd, buffer, 3, 0);
+            
+           
             printf("%s\n", buffer);
-            if(strcmp(buffer, "OK") == 0){
+
+            if(strcmp(buffer, "OK\n") == 0){
                 printf("Risposta corretta\n");
                 score++;
             }

@@ -1,0 +1,7 @@
+- Implement the handling of the PUNTEGGIO stage in the server
+- Implement the handling of the END stage in the server
+- Add error handling for invalid quiz choices in the client
+- Add functionality to display the final score to the client
+- Implement a mechanism to handle client disconnections gracefully
+- Add comments and documentation to the code for better readability
+- Test the application thoroughly to ensure all functionalities work as expected
