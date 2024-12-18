@@ -12,13 +12,18 @@
 #define PORT 4242
 #define MAX_CATEGORIA_LENGHT 50
 #define NUM_CATEGORIE 2
-#define LOGIN 1
-#define QUIZ 2
+
 #define MAX_LENGHT_QUESTION 1024
 #define MAX_LENGHT_ANSWER 1024
-#define RISPOSTA 3
-#define PUNTEGGIO 4
-#define END 5
+
+
+#define LOGIN 1
+#define NUMERO_CAT 2
+#define CATEGORIE 3
+#define QUIZ 4
+#define RISPOSTA 5
+#define PUNTEGGIO 6
+#define END 7
 
 
 #define MAX_DOMANDE 5
@@ -37,6 +42,7 @@ struct client{
     int socket;
     char username[BUFFER_SIZE];
     int score[NUM_CATEGORIE];
+    int completed_quiz[NUM_CATEGORIE];
     int current_stage;
     int current_quiz;
     int current_question;
@@ -125,12 +131,38 @@ void handle_login(int client_sock, fd_set* acrive_fds){
             }
         }
         strcpy(clients[client_sock].username, buffer);
-        clients[client_sock].current_stage = QUIZ;
+        clients[client_sock].current_stage = NUMERO_CAT;
 
         send(client_sock, response, strlen(response), 0);
     }
     
 }
+void handle_number_cat(int client_sock, fd_set* acrive_fds){
+    int numCat = NUM_CATEGORIE;
+    //mandare numero di categorie
+    numCat = htonl(numCat);
+    send(client_sock, &numCat, sizeof(numCat), 0);
+    
+    clients[client_sock].current_stage = CATEGORIE;
+
+
+}
+
+
+void handle_categorie(int client_sock, fd_set* acrive_fds){
+    int ret;
+    //mandare categorie
+    for(int i = 0; i < NUM_CATEGORIE; i++){
+        char categoria[MAX_CATEGORIA_LENGHT];
+        strcpy(categoria, quiz_list[i].categoria);
+        printf("sending categoria %s\n", categoria);
+        send(client_sock, categoria, strlen(categoria), 0);
+    }
+    clients[client_sock].current_stage = QUIZ;
+    return;
+}
+
+
 
 void send_question(int client_sock){
 
@@ -162,7 +194,10 @@ void handle_quiz(int client_sock, fd_set* acrive_fds){
 
     int ret;
     //ricezione scelta
+    //error handle this one    
+    
     recv(client_sock, &ret, sizeof(ret), 0);
+
     printf("scelta %d\n", ret);
     clients[client_sock].current_quiz = ret - 1;
     clients[client_sock].current_stage = RISPOSTA;
@@ -200,7 +235,14 @@ void handle_answers(int client_sock){
     send_question(client_sock);
 }
 
-
+void print_current_players(){
+    printf("Giocatori correnti:\n");
+    for(int i = 0; i < MAX_CLIENTS; i++){
+        if(clients[i].socket != 0){
+            printf("%d) %s\n",i, clients[i].username);
+        }
+    }
+}
 
 int main() {
     int server_sock, client_sock, max_sd, activity, new_socket;
@@ -244,7 +286,6 @@ int main() {
     while (1) {
         read_fds = active_fds;
 
-        // Uso di select per gestire I/O multiplexing
         activity = select(max_sd + 1, &read_fds, NULL, NULL, NULL);
 
         if ((activity < 0) && (errno != EINTR)) {
@@ -257,7 +298,7 @@ int main() {
                 perror("Accept");
                 exit(EXIT_FAILURE);
             }
-
+            print_current_players();
             printf("New connection, socket fd is %d, ip is: %s, port: %d\n",
                    new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
             //creare struttura dati utente e aggiungerla alla lista
@@ -272,6 +313,7 @@ int main() {
             if (new_socket > max_sd) {
                 max_sd = new_socket;
             }
+          
         }
 
         // Gestione di tutti i client connessi
@@ -281,6 +323,13 @@ int main() {
                     if(clients[i].current_stage == LOGIN){
                         //gestire login
                         handle_login(i, &active_fds);
+                    }
+                    if(clients[i].current_stage == NUMERO_CAT){
+                        handle_number_cat(i, &active_fds);
+                    }
+                    if(clients[i].current_stage == CATEGORIE){
+                        //gestire categorie
+                        handle_categorie(i, &active_fds);
                     }
                     else if(clients[i].current_stage == QUIZ){
                         //gestire quiz
