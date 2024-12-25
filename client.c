@@ -9,41 +9,75 @@
 #define MAX_LENGHT_QUESTION 1024
 #define MAX_LENGHT_ANSWER 1024
 
+
+void recv_msg(int sd, char* buffer){
+    int len, ret;
+	int lmsg;
+    ret=recv(sd, (void*)&lmsg, sizeof(lmsg), 0);
+	if(ret==-1){
+                perror("Errore: ");
+                exit(1);
+                }
+	len=ntohl(lmsg);
+    ret=recv(sd, (void*)buffer, len, 0);
+    if(ret==-1){
+        perror("Errore: ");
+        exit(1);
+    }
+}
+
+
+void send_msg(int sd, char* buffer){
+    int len, ret;
+    int lmsg;
+	len=strlen(buffer)+1;
+	lmsg=htonl(len);
+
+    ret=send(sd, (void*)&lmsg, sizeof(lmsg), 0);
+	if(ret==-1){
+		perror("Errore: ");
+		exit(1);
+		}
+    ret=send(sd, (void*)buffer, len, 0);
+    if(ret==-1){
+        perror("Errore: ");
+        exit(1);
+    }
+}
+
+void send_integer(int sd, int integer){
+    int ret;
+    int lmsg;
+    lmsg = htonl(integer);
+    ret = send(sd, (void*)&lmsg, sizeof(int), 0);
+    if(ret == -1){
+        perror("Errore: ");
+        exit(1);
+    }
+}
+
+
 void ricevi_categorie(int sd, int numCategorie){
     char buffer[1024];
-    
-    //for(int i = 0; i < numCategorie; i++){
-        int lunghezza;
+    printf("%d", numCategorie);
+    for(int i = 0; i < numCategorie; i++){
+        int lunghezza = 0;
+        send_integer(sd, i);
+        memset(buffer,0, 1024);
         
-        //recv(sd, &lunghezza, sizeof(lunghezza), 0);
-        //lunghezza = ntohl(lunghezza);
-        //printf("lunghezza %d\n", lunghezza);
-        
-
-        //WHAT HAPPENS FOR NOW (MIGHT NEED FIXING) 
-        //since max lenght question is higher than lenght of both questions combined, for now just
-        //one recieve is enough to accomodate for two sends
-        //this is ok-ish for now, but might need fixing in the future
-
-        int bytes_read = recv(sd, buffer, MAX_LENGHT_QUESTION, 0);
-        buffer[bytes_read] = '\0';
+        recv_msg(sd, buffer);
         printf("%s\n", buffer);
-    //}
+    }
     return;
 }
-void question_loop(int sd, char categoriaScelta[1024], int score){
+void question_loop(int sd, char categoriaScelta[1024]){
     char buffer[1024];
     int net_message_lenght;
     while(1){
             int lunghezza;
             printf("Quiz - %s\n", categoriaScelta);
             printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
-            
-            //recv(sd, &lunghezza, sizeof(lunghezza), 0);
-            //lunghezza = ntohl(lunghezza);
-            //printf("lunghezza 2 %d\n", lunghezza);
-            int bytes_read = recv(sd, buffer, MAX_LENGHT_QUESTION, 0);
-            buffer[bytes_read] = '\0';
+            recv_msg(sd, buffer);
             printf("%s\n", buffer);
             if(strcmp("END\n", buffer) == 0){
                 printf("ENDQUIZZED\n");
@@ -51,26 +85,41 @@ void question_loop(int sd, char categoriaScelta[1024], int score){
             }
             printf("La tua risposta:\n");
             fgets(buffer, 1024, stdin);
-            int message_lenght = strlen(buffer) + 1;
-            net_message_lenght = htonl(message_lenght);
-            //send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
-            send(sd, (void*)buffer, message_lenght, 0);
+            send_msg(sd, buffer);
             memset(buffer,0,MAX_LENGHT_ANSWER);
             
             recv(sd, buffer, 3, 0);
             
            
             printf("%s\n", buffer);
-
             if(strcmp(buffer, "OK\n") == 0){
                 printf("Risposta corretta\n");
-                score++;
             }
             else{
                 printf("Risposta sbagliata\n");
             }
         }
     return;
+}
+void login_loop(int sd){
+    char buffer[1024];
+    int scelta = 0;
+    while(!scelta){
+        int check;
+        fgets(buffer, 1024, stdin);
+       
+        send_msg(sd, buffer);
+        memset(buffer,0,strlen(buffer));
+        recv(sd, &check, sizeof(check), 0);
+        scelta = ntohl(check);
+        printf("%d check ricevuto\n", scelta);
+        if(scelta){
+            printf("check passato");
+        }
+        else{
+            printf("Nickname già in uso, scegline un altro\n");
+        }
+    }
 }
 int main(){
 	int ret, sd;
@@ -115,57 +164,44 @@ int main(){
     printf("Trivia Quiz\n");
     printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
     printf("Scegli un nickname: (deve essere univoco)\n");
-    while(!scelta){
-        fgets(buffer, 1024, stdin);
-        int message_lenght = strlen(buffer) + 1;
-        net_message_lenght = htonl(message_lenght);
-        //send(sd, &net_message_lenght, sizeof(net_message_lenght), 0);
-        send(sd, (void*)buffer, message_lenght, 0);
-        
-        memset(buffer,0,strlen(buffer));
-        
-        recv(sd, buffer, 3, 0);
-        printf("%s buffer ricevuto\n", buffer);
-        if(strcmp(buffer, "OK\n") == 0){
-            scelta = 1;
+    login_loop(sd);
+    
 
-        }
-        else{
-            printf("Nickname già in uso, scegline un altro\n");
-        }
-    }
-    while(1){
-        int score = 0;
-        char categoriaScelta[1024];
-        int numCategorie;
-        recv(sd, &numCategorie, sizeof(numCategorie), 0);
-        numCategorie = ntohl(numCategorie);
-        printf("numero categorie %d\n", numCategorie);
-
-        printf("Quiz disponibili\n");
-        printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");  
-        ricevi_categorie(sd, numCategorie);
+    
+    char categoriaScelta[1024];
+    int numCategorie;
+    int score = 0;
+    printf("richiesta numero categorie\n");
+    recv_msg(sd, categoriaScelta);
+    numCategorie = atoi(categoriaScelta);
        
-        printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");  
-        printf("La tua scelta:\n");
-        fgets(buffer, 1024, stdin);
-        if(strcmp(buffer, "1\n") == 0){
-            ret = 1;
-            strcpy(categoriaScelta, "Curiosità sulla tecnologia");
-        }
-        else if(strcmp(buffer, "2\n") == 0){
-            ret = 2;
-            strcpy(categoriaScelta, "Cultura Generale");
-        }
-        else{
-            printf("Scelta non valida\n");
-            continue;
-        }
-        send(sd, &ret, sizeof(ret), 0);
-        //loop di domanderintf("%d", numCategorie);
-        question_loop(sd, categoriaScelta, score);
-        break;
+    printf("numero categorie %d\n", numCategorie);
 
+    printf("Quiz disponibili\n");
+    printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");  
+    ricevi_categorie(sd, numCategorie);
+       
+    printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");  
+    printf("La tua scelta:\n");
+    fgets(buffer, 1024, stdin);
+    if(strcmp(buffer, "1\n") == 0){
+           
+        strcpy(categoriaScelta, "Curiosità sulla tecnologia");
     }
+    else if(strcmp(buffer, "2\n") == 0){
+          
+        strcpy(categoriaScelta, "Cultura Generale");
+    }
+    else{
+        printf("Scelta non valida\n");
+            
+    }
+
+    send_msg(sd, buffer);
+        //loop di domanderintf("%d", numCategorie);
+    question_loop(sd, categoriaScelta);
+        
+
+    
     close(sd);
 }
