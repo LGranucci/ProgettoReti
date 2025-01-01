@@ -67,7 +67,7 @@ struct client{
 
 struct client* client_head;
 struct quiz quiz_list[NUM_CATEGORIE];
-struct client classifiche[NUM_CATEGORIE][MAX_CLIENTS];
+struct client* classifiche[NUM_CATEGORIE];
 int lenghts_classifiche[NUM_CATEGORIE];
 int server_sock;
 
@@ -197,14 +197,27 @@ void print_classifiche(){
         //ha almeno un punto al quiz, lo aggiunge nella classifica
         while(current){
             if(current->socket > 0 && current->score[i] > 0){
-                classifiche[i][aux] = *current;
+                //classifiche[i][aux] = *current;
                 aux++;
             }
             current = current->next_client;
         }
         lenghts_classifiche[i] = aux;
-        
+        //alloca lo spazio per la classifica
+        classifiche[i] = (struct client*)malloc(aux * sizeof(struct client));    
 
+    }
+    //riempie le classifiche
+    for(int i = 0; i < NUM_CATEGORIE; i++){
+        int aux = 0;
+        struct client* current = client_head;
+        while(current){
+            if(current->socket > 0 && current->score[i] > 0){
+                classifiche[i][aux] = *current;
+                aux++;
+            }
+            current = current->next_client;
+        }
     }
     //ordina tutte le classifiche in ordine decrescente con selection sort
     for(int i = 0; i < NUM_CATEGORIE; i++){

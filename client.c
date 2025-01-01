@@ -132,7 +132,7 @@ void richiesta_classifica(int sd){
             memset(buffer,0, 1024);
             send_integer(sd, j);
             recv_msg(sd, buffer);
-            printf("%s\n", buffer);
+            printf("- %s\n", buffer);
         }
     }
     send_integer(sd, numCategorie);
