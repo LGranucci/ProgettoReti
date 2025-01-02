@@ -1,5 +1,5 @@
 all: 
-	gcc -Wall -g -o server server_with_select.c 
+	gcc -Wall -g -o server server.c 
 	gcc -Wall -g -o client client.c
 
 

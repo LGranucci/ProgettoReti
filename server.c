@@ -69,7 +69,7 @@ struct client* client_head;
 struct quiz quiz_list[NUM_CATEGORIE];
 struct client* classifiche[NUM_CATEGORIE];
 int lenghts_classifiche[NUM_CATEGORIE];
-int server_sock;
+
 
 void strip_newline_if_present(char* buffer){
     if(buffer[strlen(buffer) - 1] == '\n'){
@@ -77,7 +77,7 @@ void strip_newline_if_present(char* buffer){
     }
 }
 
-void handle_number_cat(int client_sock, struct client* client, fd_set* acrive_fds);
+void handle_number_cat(int client_sock, struct client* client);
 
 void close_connection_with_client(struct client* client, int sd){
     //rimuovo il client dalla lista
@@ -101,13 +101,6 @@ void close_connection_with_client(struct client* client, int sd){
 
         
 }
-void signal_handler(int sig){
-    printf("Server chiuso\n");
-    
-    close(server_sock);
-    exit(0);
-}
-
 
 int recv_msg(struct client* client, int sd, char* buffer){
     int len, ret;
@@ -196,7 +189,7 @@ void print_classifiche(){
         //calcolo la lunghezza di ogni classifica: se il client è allocato e
         //ha almeno un punto al quiz, lo aggiunge nella classifica
         while(current){
-            if(current->socket > 0 && current->score[i] > 0){
+            if(current->socket > 0 && current->score[i] >= 0){
                 //classifiche[i][aux] = *current;
                 aux++;
             }
@@ -205,14 +198,13 @@ void print_classifiche(){
         lenghts_classifiche[i] = aux;
         //alloca lo spazio per la classifica
         classifiche[i] = (struct client*)malloc(aux * sizeof(struct client));    
-
     }
     //riempie le classifiche
     for(int i = 0; i < NUM_CATEGORIE; i++){
         int aux = 0;
         struct client* current = client_head;
         while(current){
-            if(current->socket > 0 && current->score[i] > 0){
+            if(current->socket >= 0 && current->score[i] >= 0){
                 classifiche[i][aux] = *current;
                 aux++;
             }
@@ -238,6 +230,7 @@ void print_classifiche(){
         for(int j = 0; j < lenghts_classifiche[i]; j++){
             printf("- %s %d\n", classifiche[i][j].username, classifiche[i][j].score[i]);
         }
+        printf("\n");
     }
     //stampa per ogni quiz i giocatori che li hanno completati
     for(int i = 0; i < NUM_CATEGORIE; i++){
@@ -249,7 +242,9 @@ void print_classifiche(){
             }
             current = current->next_client;
         }
+        printf("\n");
     }
+    printf("------\n");
 }
 
 
@@ -262,13 +257,17 @@ void create_category_list(){
     }
     char line[BUFFER_SIZE];
     int i = 0;
+    printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
+    printf("Temi:\n");
+    
     while(fgets(line, sizeof(line), file)){
-        printf("categoria %s\n", line);
+        printf("%d - %s",i + 1, line);
         //salva le categorie in quiz_list[i].categoria
         strcpy(quiz_list[i].categoria, line);
         quiz_list[i].isset = 1;
         i++;
     }
+    printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
     fclose(file);
 }   
 
@@ -332,7 +331,7 @@ void create_quiz_list(){
 }
 
 
-void handle_login(int client_sock, struct client* client, fd_set* acrive_fds){
+void handle_login(int client_sock, struct client* client){
     char buffer[BUFFER_SIZE];
     int response = 1;
     int ret;
@@ -359,7 +358,7 @@ void handle_login(int client_sock, struct client* client, fd_set* acrive_fds){
 }
     
 
-void handle_number_cat(int client_sock, struct client* client, fd_set* acrive_fds){
+void handle_number_cat(int client_sock, struct client* client){
     int numCat = NUM_CATEGORIE;
   
     recv_integer(client, client_sock);
@@ -369,38 +368,39 @@ void handle_number_cat(int client_sock, struct client* client, fd_set* acrive_fd
 }
 
 
-void handle_categorie(int client_sock, struct client* client, fd_set* acrive_fds){
-    int ret;
-    //mandare categorie
-    char categoria[MAX_CATEGORIA_LENGHT];
-    ret = recv_integer(client, client_sock);
-    //strcpy(categoria, quiz_list[NUM_CATEGORIE - client->contatore].categoria);
-    strcpy(categoria, quiz_list[ret].categoria);
-    send_msg(client, client_sock, categoria);
-   
-  
-    if(ret == NUM_CATEGORIE - 1) 
-        client->current_stage = QUIZ;
+void handle_categorie(int client_sock, struct client* client){
+    recv_integer(client, client_sock);
+    char buffer[BUFFER_SIZE];
+    strcpy(buffer, "");
+    for(int i = 0; i < NUM_CATEGORIE; i++){
+        strcat(buffer, quiz_list[i].categoria);
+        if(i != NUM_CATEGORIE - 1){
+            strcat(buffer, "|");
+        }
+    }
+    send_msg(client, client_sock, buffer);
+    client->current_stage = QUIZ;
     return;
 }
 
 
 
-void send_question(int client_sock, struct client* client){
+void handle_send_question(int client_sock, struct client* client){
+    char current_question[MAX_LENGHT_QUESTION];
     recv_integer(client, client_sock);
+    //se sono finite le domande
     if(client->current_question >= quiz_list[client->current_quiz].numDomande){
         printf("quiz finito\n");
         char buffer[1024];
+        //manda un messaggio di fine domande al client
         strcpy(buffer, "END\n");
         send_msg(client, client_sock, buffer);
-        //send endQuiz to client
+        
         client->completed_quiz[client->current_quiz] = 1;
         client->current_stage = CATEGORIE;
         
         return;
     }
-    char current_question[MAX_LENGHT_QUESTION];
-    //send first quiz question 
     struct quiz current_quiz = quiz_list[client->current_quiz];
     strcpy(current_question, current_quiz.domande[client->current_question].domanda);
     
@@ -409,15 +409,16 @@ void send_question(int client_sock, struct client* client){
 }
 
 
-void handle_quiz(int client_sock, struct client* client, fd_set* active_fds){
+void handle_quiz(int client_sock, struct client* client){
     char buffer[1024];
     int scelta, ret;
-     
+    //riceve il messaggio di selezione del quiz
     ret = recv_msg(client, client_sock, buffer);
     if(ret != 0){
         client->old_state = QUIZ;
         return;
     }
+    //lo converte a intero: non serve controllare se è un numero, perchè il check è fatto client-side
     scelta = atoi(buffer);
     
     if(client->completed_quiz[scelta - 1]){
@@ -446,10 +447,6 @@ int check_answer(struct client* client, char* answer){
         answer[i] = tolower(answer[i]);
     } 
     while(current_risposta != NULL){
-        printf("risposta %s\n", current_risposta->risposta);
-        printf("risposta mandata %s\n", answer);
-        printf("lunghezza risposta %ld\n", strlen(current_risposta->risposta));
-        printf("lunghezza risposta mandata %ld\n", strlen(answer));
         if(strcmp(current_risposta->risposta, answer) == 0){
             return 1;
         }
@@ -533,7 +530,7 @@ void print_current_players(){
         client = client->next_client;
     }
     printf("Partecipanti: (%d)\n", aux);
-   
+    printf("\n");
     client = client_head;
     while(client){
         printf("- %s\n", client->username);
@@ -545,9 +542,10 @@ int main() {
     int max_sd, activity, new_socket;
     struct sockaddr_in address, client_address;
     socklen_t client_addr_len;
-    //int addrlen = sizeof(address);
+    int server_sock;
+ 
     
-    fd_set active_fds, read_fds;
+    fd_set read_fds;
     initialize_clients();
     // Creazione socket
     if ((server_sock = socket(AF_INET, SOCK_STREAM, 0)) == 0) {
@@ -557,7 +555,7 @@ int main() {
     create_category_list();
     create_quiz_list();
     //ridefinire il signal handler
-    signal(SIGINT, signal_handler);
+    
 
     // Binding
     memset(&address, 0, sizeof(address));
@@ -580,10 +578,8 @@ int main() {
     printf("Server listening on port %d...\n", PORT);
 
     // Inizializzazione del set di file descriptor
-    FD_ZERO(&active_fds);
-    FD_ZERO(&read_fds);
     
-    FD_SET(server_sock, &active_fds);
+    FD_ZERO(&read_fds);
     max_sd = server_sock;
 
     while (1) {
@@ -599,8 +595,6 @@ int main() {
             }
             client = client->next_client;
         }
-        //read_fds = active_fds;
-
         activity = select(max_sd + 1, &read_fds,NULL,  NULL, NULL);
         print_current_players();
         print_classifiche();
@@ -615,9 +609,7 @@ int main() {
                 perror("Accept");
                 exit(EXIT_FAILURE);
             }
-            print_current_players();
-            printf("New connection, socket fd is %d, ip is: %s, port: %d\n",
-                   new_socket, inet_ntoa(address.sin_addr), ntohs(address.sin_port));
+           
             //creare struttura dati utente e aggiungerla alla lista
             struct client* new_client = (struct client*)malloc(sizeof(struct client));
             new_client->socket = new_socket;
@@ -639,7 +631,7 @@ int main() {
                 }
                 current->next_client = new_client;
             }
-            FD_SET(new_socket, &active_fds);
+           
             if (new_socket > max_sd) {
                 max_sd = new_socket;
             }
@@ -647,7 +639,6 @@ int main() {
         }
 
         // Gestione di tutti i client connessi
-       
         for (int i = 0; i <= max_sd; i++) {
             if (FD_ISSET(i, &read_fds)) {
                 struct client* client = client_head;
@@ -659,23 +650,19 @@ int main() {
                 }
                 if (client->socket != server_sock) {
                     if(client->current_stage == LOGIN){
-                        //gestire login
-                        handle_login(client->socket, client, &active_fds);
+                        handle_login(client->socket, client);
                     }
                     else if(client->current_stage == NUMERO_CAT){
-                        handle_number_cat(client->socket, client, &active_fds);
+                        handle_number_cat(client->socket, client);
                     }
                     else if(client->current_stage == CATEGORIE){
-                        //gestire categorie
-                        handle_categorie(client->socket, client, &active_fds);
+                        handle_categorie(client->socket, client);
                     }
                     else if(client->current_stage == QUIZ){
-                        //gestire quiz
-                        handle_quiz(client->socket, client, &active_fds);
+                        handle_quiz(client->socket, client);
                     }
                     else if(client->current_stage == DOMANDA){
-                        //gestire domanda
-                        send_question(client->socket, client);
+                        handle_send_question(client->socket, client);
                     }
                     else if(client->current_stage == RISPOSTA){
                         //gestire risposta
@@ -684,7 +671,7 @@ int main() {
                     else if(client->current_stage == CLASSIFICA_NUMERO){
                         //gestire punteggio
                         //manda il numero di categorie, che il client potrebbe non sapere
-                        handle_number_cat(client->socket, client, &active_fds);
+                        handle_number_cat(client->socket, client);
                         client->current_stage = CLASSIFICA_NUMERO_GIOCATORI;
                         //updata la classifica
                      
@@ -699,11 +686,9 @@ int main() {
                         }
                     }
                     else if(client->current_stage == CLASSIFICA_NUMERO_GIOCATORI){
-                        
                         handle_numero_giocatori(client->socket, client);
                     }
                     else if(client->current_stage == CLASSIFICA){
-                        //manda la classifica
                         handle_classifiche(client->socket, client);
                  
                     }

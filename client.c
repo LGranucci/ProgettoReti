@@ -124,7 +124,7 @@ void richiesta_classifica(int sd){
     send_integer(sd, 0);
     numCategorie = recv_integer(sd);
     for(int i = 0; i < numCategorie; i++){
-        printf("Tema %d:\n", i);
+        printf("Tema %d:\n", i + 1);
         int numGiocatori;
         send_integer(sd, i);
         numGiocatori = recv_integer(sd);
@@ -154,6 +154,7 @@ int get_msg_from_console(char* buffer, int sd){
         fgets(buffer, 1024, stdin);
         //se il messaggio è show score, chiede al server di inviare la classifica
         if(strcmp(buffer, "show score\n") == 0){
+            printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
             printf("Classifica\n");
             richiesta_classifica(sd);
             printf("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++\n");
@@ -175,18 +176,25 @@ int get_msg_from_console(char* buffer, int sd){
 
 void ricevi_categorie(int sd, int numCategorie){
     char buffer[1024];
-    printf("%d", numCategorie);
     arrayCategorie = (char**)malloc(numCategorie * sizeof(char*));
-    for(int i = 0; i < numCategorie; i++){
-        send_integer(sd, i);
-        memset(buffer,0, 1024);
+    send_integer(sd, 0);
+    memset(buffer,0, 1024);
         
-        recv_msg(sd, buffer);
-        arrayCategorie[i] = (char*)malloc(strlen(buffer) + 1);
-        strcpy(arrayCategorie[i], buffer);
-        printf("%s\n", buffer);
-
+    recv_msg(sd, buffer);
+    //separa le categorie con il carattere |
+    char* token = strtok(buffer, "|");
+    int i = 0;
+    while(token != NULL){
+        
+        arrayCategorie[i] = (char*)malloc(strlen(token) + 1);
+        printf("%d - %s",i + 1, token);
+        strcpy(arrayCategorie[i], token);
+        token = strtok(NULL, "|");
+        i++;
     }
+    
+    
+    
     return;
 }
 int question_loop(int sd, char categoriaScelta[1024]){
@@ -280,19 +288,21 @@ int scelta_categoria_loop(int sd, char* buffer, char* categoriaScelta, int numCa
 
 
 int main(int argc, char** argv){
+    //in un loop infinito perchè il cliente potrebbe dover tornare all'inizio a seguito di un endquiz
 	while(1){
         int ret, sd, port;
-        
-        /*if(argc != 2){
+        char categoriaScelta[1024];
+        int numCategorie;
+        struct sockaddr_in sv_addr;
+        char buffer[1024];
+        if(argc != 2){
             printf("Devi immettere il numero di porta");
             exit(1);
         }
 
         port = atoi(argv[1]);
-        */
-        port = 4242;
-        struct sockaddr_in sv_addr;
-        char buffer[1024];
+
+        
         
         sd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -334,8 +344,7 @@ int main(int argc, char** argv){
         if(ret == -1){
             continue;
         }
-        char categoriaScelta[1024];
-        int numCategorie;
+        
         
         send_integer(sd, 1);
         numCategorie = recv_integer(sd);    
